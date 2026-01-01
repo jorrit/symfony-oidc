@@ -163,17 +163,22 @@ class OidcJwtHelper
   {
     self::$validator ??= new Validator();
 
-    // Parse the token
-    $signer = $this->getTokenSigner($token);
-    $key    = $this->getTokenKey($jwksUri, $token);
+    // Check token signature, except when access token is not issued by $issuer.
+    if ($tokenType === OidcTokenType::ACCESS && !$token->hasBeenIssuedBy($issuer)) {
+      $issuer = $token->claims()->get(RegisteredClaims::ISSUER, $issuer);
+    }
+    else {
+      $signer = $this->getTokenSigner($token);
+      $key    = $this->getTokenKey($jwksUri, $token);
 
-    try {
-      self::$validator->assert($token, new SignedWith($signer, $key));
-    } catch (RequiredConstraintsViolated $e) {
-      throw new OidcAuthenticationException(
-        "Unable to verify signature - {$e->getMessage()}",
-        previous: $e
-      );
+      try {
+        self::$validator->assert($token, new SignedWith($signer, $key));
+      } catch (RequiredConstraintsViolated $e) {
+        throw new OidcAuthenticationException(
+          "Unable to verify signature - {$e->getMessage()}",
+          previous: $e
+        );
+      }
     }
 
     // Default claims
